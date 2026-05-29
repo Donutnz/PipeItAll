@@ -25,12 +25,25 @@ def run(_context: str):
 		#ui.messageBox(f'"{app.activeDocument.name}" is the active Document.')
 		design=adsk.fusion.Design.cast(app.activeProduct)
 
+		app.log("Starting Pipe! It! All! script...")
+
 		if not design:
 			ui.messageBox('No active Fusion design', 'No Design')
 			return
+
+		#Get current selected items
+		currentSelections:adsk.core.Selections=app.userInterface.activeSelections
+
+		#Check if anything is selected
+		if len(currentSelections) < 1:
+			ui.messageBox("Nothing Selected",
+				 "Selection Error",
+				 adsk.core.MessageBoxButtonTypes.OKButtonType,
+				 adsk.core.MessageBoxIconTypes.CriticalIconType)
+			return
 		
 		#Get section size
-		(diamInput, isCancelled) = ui.inputBox("Pipe Section Diameter: ", "Pipe Size", "10")
+		(diamInput, isCancelled) = ui.inputBox("Pipe Section Diameter: ", "Pipe Size", "100")
 		
 		if isCancelled:
 			return
@@ -48,19 +61,28 @@ def run(_context: str):
 		pipeableLines=list()
 
 		# Filter for only sketchLines
-		currentSelections:adsk.core.Selections=app.userInterface.activeSelections;
-		
 		for sel in currentSelections.asArray():
 			s:adsk.core.Selection=adsk.core.Selection.cast(sel)
 
-			app.log("Type: {}".format(s.entity.classType()))
+			#app.log("Type: {}".format(s.entity.classType()))
 
-			if s.entity.classType() == adsk.fusion.SketchLine.classType():
+			if isinstance(s.entity,adsk.fusion.SketchCurve) or s.entity.classType() == adsk.fusion.BRepEdge.classType():
 				pipeableLines.append(s.entity)
+
+		#Break if nothing to be piped
+		if len(pipeableLines) < 1:
+			ui.messageBox("Nothing Pipeable Selected",
+				 "Selection Error",
+				 adsk.core.MessageBoxButtonTypes.OKButtonType,
+				 adsk.core.MessageBoxIconTypes.CriticalIconType)
+			return
+
 
 		# Make-a the pipes
 		allPipes:adsk.fusion.PipeFeatures=design.rootComponent.features.pipeFeatures
-		newPipes:list[adsk.fusion.PipeFeature] = list()
+		newPipes:adsk.core.ObjectCollection = adsk.core.ObjectCollection.create()
+
+		tmeLnStartIdx=None
 
 		for skLn in pipeableLines:
 			sLine:adsk.fusion.SketchCurve=skLn
@@ -68,10 +90,30 @@ def run(_context: str):
 			pFeat:adsk.fusion.PipeFeatureInput=allPipes.createInput(
 				adsk.fusion.Path.create(sLine, adsk.fusion.ChainedCurveOptions.noChainedCurves),
 				adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+			
 			pFeat.sectionSize=adsk.core.ValueInput.createByReal(diameterValue)
+			
+			curPipe=allPipes.add(pFeat)
 
-			newPipes.append(allPipes.add(pFeat))
-			app.log("Add Pipe: {}".format(pFeat))
+			#Grab first timeline index
+			if tmeLnStartIdx is None:
+				tmeLnStartIdx=curPipe.timelineObject.index
+
+			newPipes.add(curPipe.bodies.item(0))
+			#app.log("Add Pipe: {}".format(pFeat))
+
+		#Combine all created pipe bodies
+		targetPipe=newPipes.item(0) #Use first pipe as target body
+		newPipes.removeByIndex(0)
+
+		combinePipesInp:adsk.fusion.CombineFeatureInput=design.rootComponent.features.combineFeatures.createInput(targetPipe, newPipes)
+		combinePipesInp.operation=adsk.fusion.FeatureOperations.JoinFeatureOperation
+		
+		tmeLnEndIdx=design.rootComponent.features.combineFeatures.add(combinePipesInp).timelineObject.index
+
+		#Group timeline objects (for tidyness)
+		pipeGroup=design.timeline.timelineGroups.add(tmeLnStartIdx, tmeLnEndIdx)
+		pipeGroup.name="PipeNetwork"
 
 		app.log("Done")
 			
