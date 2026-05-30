@@ -43,7 +43,7 @@ def run(_context: str):
 			return
 		
 		#Get section size
-		(diamInput, isCancelled) = ui.inputBox("Pipe Section Diameter: ", "Pipe Size", "100")
+		(diamInput, isCancelled) = ui.inputBox("Pipe Section Diameter: ", "Pipe Size", "100mm")
 		
 		if isCancelled:
 			return
@@ -61,6 +61,8 @@ def run(_context: str):
 		pipeableLines=list()
 
 		# Filter for only sketchLines
+		app.log("Filtering for valid lines...")
+
 		for sel in currentSelections.asArray():
 			s:adsk.core.Selection=adsk.core.Selection.cast(sel)
 
@@ -76,33 +78,67 @@ def run(_context: str):
 				 adsk.core.MessageBoxButtonTypes.OKButtonType,
 				 adsk.core.MessageBoxIconTypes.CriticalIconType)
 			return
-
+		
 
 		# Make-a the pipes
-		allPipes:adsk.fusion.PipeFeatures=design.rootComponent.features.pipeFeatures
+		allPipes:adsk.fusion.PipeFeatures=design.activeComponent.features.pipeFeatures
 		newPipes:adsk.core.ObjectCollection = adsk.core.ObjectCollection.create()
 
 		tmeLnStartIdx=None
+		
+		app.log("Laying Pipe...")
+
+		lnsPipedCnt=0
+
+		progDlg=ui.createProgressDialog()
+		progDlg.cancelButtonText = "Cancel"
+		progDlg.isBackgroundTranslucent=False
+		progDlg.isCancelButtonShown = True
+
+		progDlg.show("Pipeing...",
+			   "Completed: %p, Piped: %v, Total Pipes: %m",
+			   0,
+			   len(pipeableLines),
+			   0
+			   )
 
 		for skLn in pipeableLines:
 			sLine:adsk.fusion.SketchCurve=skLn
 
+			if progDlg.wasCancelled:
+				break
+
+			pipePath:adsk.fusion.Path=adsk.fusion.Path.create(sLine, adsk.fusion.ChainedCurveOptions.noChainedCurves)
+
 			pFeat:adsk.fusion.PipeFeatureInput=allPipes.createInput(
-				adsk.fusion.Path.create(sLine, adsk.fusion.ChainedCurveOptions.noChainedCurves),
+				pipePath,
 				adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
 			
 			pFeat.sectionSize=adsk.core.ValueInput.createByReal(diameterValue)
-			
-			curPipe=allPipes.add(pFeat)
+
+			curPipe=design.activeComponent.features.pipeFeatures.add(pFeat)
 
 			#Grab first timeline index
 			if tmeLnStartIdx is None:
 				tmeLnStartIdx=curPipe.timelineObject.index
 
 			newPipes.add(curPipe.bodies.item(0))
-			#app.log("Add Pipe: {}".format(pFeat))
+
+			lnsPipedCnt+=1
+
+			if lnsPipedCnt % 10 == 0:
+				adsk.doEvents()
+			
+			app.log("Add Pipe: {}".format(curPipe.name))
+			progDlg.progressValue=lnsPipedCnt
+
+		progDlg.hide()
+
+		"""
 
 		#Combine all created pipe bodies
+		app.log("Combining Pipes...")
+
 		targetPipe=newPipes.item(0) #Use first pipe as target body
 		newPipes.removeByIndex(0)
 
@@ -112,8 +148,12 @@ def run(_context: str):
 		tmeLnEndIdx=design.rootComponent.features.combineFeatures.add(combinePipesInp).timelineObject.index
 
 		#Group timeline objects (for tidyness)
+		app.log("Grouping Features...")
+
 		pipeGroup=design.timeline.timelineGroups.add(tmeLnStartIdx, tmeLnEndIdx)
 		pipeGroup.name="PipeNetwork"
+
+		"""
 
 		app.log("Done")
 			
