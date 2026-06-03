@@ -3,10 +3,10 @@
 	"type":	"script",
 	"author":	"Donutnz",
 	"description":	{
-		"":	"Makes all selected curves pipes"
+		"":	"Makes all selected lines, curves, etc. individual pipes"
 	},
 	"version":	"",
 	"supportedOS":	"windows|mac",
 	"editEnabled":	true,
-	"iconFilename":	"ScriptIcon.svg"
+	"iconFilename":	"PipeIcon.svg"
 }

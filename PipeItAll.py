@@ -88,7 +88,7 @@ def run(_context: str):
 		
 		app.log("Laying Pipe...")
 
-		lnsPipedCnt=0
+		pipesCompletedCnt=0
 
 		progDlg=ui.createProgressDialog()
 		progDlg.cancelButtonText = "Cancel"
@@ -96,11 +96,10 @@ def run(_context: str):
 		progDlg.isCancelButtonShown = True
 
 		progDlg.show("Pipeing...",
-			   "Completed: %p, Piped: %v, Total Pipes: %m",
+			   "Piping... (%p percent), Completed Pipes: %v, Total Pipes: %m",
 			   0,
 			   len(pipeableLines),
-			   0
-			   )
+			   0)
 
 		for skLn in pipeableLines:
 			sLine:adsk.fusion.SketchCurve=skLn
@@ -124,13 +123,13 @@ def run(_context: str):
 
 			newPipes.add(curPipe.bodies.item(0))
 
-			lnsPipedCnt+=1
+			pipesCompletedCnt+=1
 
-			if lnsPipedCnt % 10 == 0:
+			if pipesCompletedCnt % 10 == 0:
 				adsk.doEvents()
 			
 			app.log("Add Pipe: {}".format(curPipe.name))
-			progDlg.progressValue=lnsPipedCnt
+			progDlg.progressValue=pipesCompletedCnt
 
 		progDlg.hide()
 
